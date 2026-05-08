@@ -1,6 +1,6 @@
 # Catch Report
 
-A mobile-first fishing log for tracking catches by species, lure, time, and location. The first version is a static PWA that runs in the browser and stores catch history locally on the device.
+A mobile-first fishing log for tracking catches by species, lure, time, and location. The app runs as a static PWA, keeps a local copy on the device, and can sync to Firebase Firestore when configured.
 
 ## Run Locally
 
@@ -21,6 +21,7 @@ Open `http://127.0.0.1:4173/index.html`.
 - GPS fill-in when browser location permission is allowed.
 - Map pin selection for manual spot adjustment.
 - Local catch history persisted in `localStorage`.
+- Optional Firebase Auth and Firestore cloud sync.
 - Hotspot circles for nearby catch clusters.
 - Area, fish, and lure filters.
 - Best time-of-day, top fish, top lure, and top spot summaries.
@@ -39,12 +40,27 @@ Catch data stays in the current browser unless exported. GPS is only requested w
 
 See [SECURITY.md](SECURITY.md) for the current privacy model and the launch hardening checklist.
 
-For long-term multi-device use, the next secure step is an authenticated backend with:
+## Free Firebase Setup
 
-- Sign in with Apple or passkeys.
-- Encrypted transport over HTTPS.
-- Per-user database rows protected by row-level security.
-- Automatic cloud backup and restore.
-- Optional private sharing for selected spots.
+Use Firebase's free Spark plan. Do not upgrade to Blaze if you want to keep the cost capped at $0.
 
-Good backend candidates for the next phase are Supabase, Firebase, or a small custom API.
+1. Create a Firebase project in the Firebase Console.
+2. Add a Web app to the project.
+3. Enable Authentication and turn on Google as a sign-in provider.
+4. Add authorized domains for local and hosted use:
+   - `localhost`
+   - `127.0.0.1`
+   - `caruso1058.github.io`
+5. Create a Cloud Firestore database in production mode.
+6. In the Firestore Rules tab, paste the contents of `firestore.rules` and publish.
+7. Copy the Firebase web config into `firebase-config.js`.
+8. Change `firebaseEnabled` in `firebase-config.js` to `true`.
+9. Commit and push the config update.
+
+Catch data is stored at:
+
+```txt
+users/{userId}/catches/{catchId}
+```
+
+The rules only allow a signed-in user to read and write their own catch documents.

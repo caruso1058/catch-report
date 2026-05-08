@@ -1,0 +1,62 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/catches/{catchId} {
+      allow read, delete: if signedInOwner(userId);
+      allow create, update: if signedInOwner(userId)
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.id == catchId
+        && validCatch(request.resource.data);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function signedInOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function validCatch(data) {
+      return data.keys().hasOnly([
+        'id',
+        'owner',
+        'areaId',
+        'areaName',
+        'waterType',
+        'fish',
+        'lure',
+        'caughtAt',
+        'locationName',
+        'lat',
+        'lng',
+        'notes',
+        'createdAt',
+        'updatedAt'
+      ])
+      && data.id is string
+      && data.owner is string
+      && data.areaId is string
+      && data.areaName is string
+      && data.waterType is string
+      && data.fish is string
+      && data.lure is string
+      && data.caughtAt is string
+      && data.locationName is string
+      && data.lat is number
+      && data.lng is number
+      && data.notes is string
+      && data.createdAt is string
+      && data.updatedAt is string
+      && data.fish.size() <= 80
+      && data.lure.size() <= 80
+      && data.locationName.size() <= 120
+      && data.notes.size() <= 2000
+      && data.lat >= -90
+      && data.lat <= 90
+      && data.lng >= -180
+      && data.lng <= 180;
+    }
+  }
+}

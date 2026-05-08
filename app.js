@@ -1,4 +1,5 @@
 const STORAGE_KEY = "catch-report:catches:v1";
+const LOCAL_CHANGE_EVENT = "catchreport:local-change";
 const LAKE_MARGARET = {
   id: "lake-margaret",
   name: "Lake Margaret",
@@ -180,6 +181,7 @@ const state = {
   activeAreaId: LAKE_MARGARET.id,
   mapRenderer: null,
   shouldFitMap: false,
+  suppressSyncEvent: false,
   filters: {
     area: "All",
     fish: "All",
@@ -219,6 +221,9 @@ const els = {
   timeBars: document.querySelector("#time-bars"),
   lureRanking: document.querySelector("#lure-ranking"),
   privacyNote: document.querySelector("#privacy-note"),
+  syncStatus: document.querySelector("#sync-status"),
+  signInBtn: document.querySelector("#sign-in-btn"),
+  signOutBtn: document.querySelector("#sign-out-btn"),
   installHint: document.querySelector("#install-hint"),
 };
 
@@ -252,7 +257,10 @@ function bindEvents() {
   els.exportBtn.addEventListener("click", exportData);
   els.importFile.addEventListener("change", importData);
   els.seedBtn.addEventListener("click", () => {
-    state.catches = [...sampleCatches, ...state.catches];
+    state.catches = [
+      ...sampleCatches.map((entry) => ({ ...entry, updatedAt: new Date().toISOString() })),
+      ...state.catches,
+    ];
     persist();
     render();
   });
@@ -404,6 +412,7 @@ function saveCatch(event) {
     lng,
     notes: els.notes.value.trim(),
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
   state.catches.unshift(entry);
@@ -711,14 +720,49 @@ function toDateTimeInputValue(date) {
 
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.catches));
+  if (!state.suppressSyncEvent) {
+    window.dispatchEvent(new CustomEvent(LOCAL_CHANGE_EVENT, { detail: { catches: cloneCatches(state.catches) } }));
+  }
 }
 
 function loadCatches() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]").map(normalizeCatch);
   } catch {
     return [];
   }
+}
+
+function mergeCloudCatches(cloudCatches) {
+  const mergedById = new Map();
+  [...state.catches, ...cloudCatches].filter(isValidCatch).forEach((entry) => {
+    const existing = mergedById.get(entry.id);
+    if (!existing || getModifiedTime(entry) >= getModifiedTime(existing)) {
+      mergedById.set(entry.id, normalizeCatch(entry));
+    }
+  });
+
+  state.suppressSyncEvent = true;
+  state.catches = [...mergedById.values()].sort((a, b) => new Date(b.caughtAt) - new Date(a.caughtAt));
+  persist();
+  state.suppressSyncEvent = false;
+  render();
+}
+
+function normalizeCatch(entry) {
+  return {
+    ...entry,
+    createdAt: entry.createdAt || new Date().toISOString(),
+    updatedAt: entry.updatedAt || entry.createdAt || new Date().toISOString(),
+  };
+}
+
+function getModifiedTime(entry) {
+  return new Date(entry.updatedAt || entry.createdAt || entry.caughtAt || 0).getTime();
+}
+
+function cloneCatches(catches) {
+  return catches.map((entry) => ({ ...entry }));
 }
 
 function exportData() {
@@ -783,5 +827,19 @@ function registerServiceWorker() {
     navigator.serviceWorker.register("sw.js").then((registration) => registration.update()).catch(() => {});
   }
 }
+
+window.CatchReportApp = {
+  getCatches: () => cloneCatches(state.catches),
+  mergeCloudCatches,
+  setSyncStatus(message) {
+    els.syncStatus.textContent = message;
+  },
+  setAuthControls({ configured, signedIn, signIn, signOut }) {
+    els.signInBtn.hidden = !configured || signedIn;
+    els.signOutBtn.hidden = !configured || !signedIn;
+    els.signInBtn.onclick = signIn;
+    els.signOutBtn.onclick = signOut;
+  },
+};
 
 init();

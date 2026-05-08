@@ -1,10 +1,12 @@
-const CACHE_NAME = "catch-report-v4";
+const CACHE_NAME = "catch-report-v5";
 const APP_SHELL = [
   "./",
   "index.html",
   "styles.css",
   "app.js",
   "icons.js",
+  "firebase-config.js",
+  "firebase-sync.js",
   "public/manifest.webmanifest",
   "public/icon.svg",
 ];

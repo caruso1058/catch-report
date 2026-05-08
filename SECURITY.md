@@ -5,8 +5,8 @@ Catch Report is public source code, but catch data is private by default.
 ## Current Data Model
 
 - Catch entries are stored in the browser on the user's device with `localStorage`.
-- The app does not have a backend database.
-- The app does not upload catch history, GPS coordinates, notes, species, or lure selections.
+- If Firebase is configured and the user signs in, catches are also synced to that user's private Firestore path.
+- The Firebase path is `users/{uid}/catches/{catchId}`.
 - Location permission is requested only when the user presses `Use GPS`.
 - Exported JSON files are user-controlled backups and should be treated as private location data.
 
@@ -30,6 +30,7 @@ For a stricter privacy version, use a vetted map provider, self-host map tiles, 
 - Referrer policy is set to `no-referrer`.
 - Geolocation is limited to the app origin by Permissions Policy.
 - Icons are local code rather than a mutable third-party `latest` script.
+- Firestore rules restrict catch documents to the signed-in owner's UID.
 - Service worker uses network-first updates for app files so fixes replace old cached code.
 
 ## Before Launching As A Real Phone App
@@ -37,5 +38,5 @@ For a stricter privacy version, use a vetted map provider, self-host map tiles, 
 - Serve only over HTTPS.
 - Add automated dependency and secret scanning in GitHub.
 - Avoid analytics unless explicitly opt-in and privacy-preserving.
-- If cloud sync is added, require authentication, row-level per-user access controls, encrypted transport, and a clear delete/export flow.
+- If cloud sync is enabled, keep Firestore rules published from `firestore.rules` and avoid broad read/write rules.
 - Never store precise user locations in public logs.
