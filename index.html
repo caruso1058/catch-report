@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f3d38" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Catch Report" />
+    <title>Catch Report</title>
+    <link rel="manifest" href="/public/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/public/icon.svg" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIINfQvmd3XD/Bf/D1M8Y431Q5IRhGkX9TA="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="/styles.css?v=4" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><i data-lucide="fish"></i></div>
+          <div>
+            <h1>Catch Report</h1>
+            <p>Log catches, reveal hot spots, learn the bite window.</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="ghost" id="export-btn" type="button" title="Export catch data">
+            <i data-lucide="download"></i><span>Export</span>
+          </button>
+          <label class="file-button" title="Import catch data">
+            <i data-lucide="upload"></i><span>Import</span>
+            <input id="import-file" type="file" accept="application/json" hidden />
+          </label>
+        </div>
+      </header>
+
+      <div class="layout">
+        <section class="stack">
+          <form class="panel" id="catch-form">
+            <div class="section-title">
+              <div>
+                <h2>Log a Catch</h2>
+                <p>Choose the water, then log the catch with GPS or a map pin.</p>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Water</span>
+                <select id="water-area" required></select>
+              </label>
+
+              <label class="field">
+                <span>Fish</span>
+                <select id="fish" required></select>
+                <input id="fish-other" placeholder="Fish species" hidden />
+              </label>
+
+              <label class="field">
+                <span>Lure</span>
+                <select id="lure" required></select>
+                <input id="lure-other" placeholder="Lure or bait" hidden />
+              </label>
+
+              <label class="field">
+                <span>Time</span>
+                <input id="caught-at" type="datetime-local" required />
+              </label>
+
+              <label class="field">
+                <span>Spot Name</span>
+                <input id="location-name" placeholder="Dock, north bank, south cove" />
+              </label>
+
+              <div class="button-row">
+                <button class="secondary" id="locate-btn" type="button">
+                  <i data-lucide="crosshair"></i>Use GPS
+                </button>
+                <button class="ghost" id="area-btn" type="button">
+                  <i data-lucide="map-pin"></i>Use Water Center
+                </button>
+              </div>
+
+              <div class="position-picker" aria-label="Quick location choices">
+                <button class="ghost" type="button" data-position="north">North</button>
+                <button class="ghost" type="button" data-position="south">South</button>
+                <button class="ghost" type="button" data-position="east">East</button>
+                <button class="ghost" type="button" data-position="west">West</button>
+                <button class="ghost" type="button" data-position="center">Center</button>
+              </div>
+
+              <div class="split">
+                <label class="field">
+                  <span>Latitude</span>
+                  <input id="lat" inputmode="decimal" required />
+                </label>
+                <label class="field">
+                  <span>Longitude</span>
+                  <input id="lng" inputmode="decimal" required />
+                </label>
+              </div>
+
+              <label class="field">
+                <span>Notes</span>
+                <textarea id="notes" placeholder="Weather, depth, retrieve, shoreline detail"></textarea>
+              </label>
+
+              <div class="button-row">
+                <button class="primary" type="submit">
+                  <i data-lucide="plus"></i>Save Catch
+                </button>
+                <button class="ghost" id="reset-btn" type="button">
+                  <i data-lucide="rotate-ccw"></i>Reset
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <section class="panel privacy">
+            <strong>Private by default</strong>
+            <span id="privacy-note">Catch data is stored in this browser. Export a backup anytime.</span>
+            <span id="install-hint">On iPhone, open this page in Safari and use Share > Add to Home Screen.</span>
+          </section>
+        </section>
+
+        <section class="stack">
+          <section class="map-panel">
+            <div class="map-toolbar">
+              <div>
+                <strong>Catch Map</strong>
+                <span id="filter-summary">Showing all catches</span>
+              </div>
+              <div class="filters">
+                <label>
+                  <span>Water</span>
+                  <select id="area-filter" aria-label="Filter by water"></select>
+                </label>
+                <label>
+                  <span>Fish</span>
+                  <select id="fish-filter" aria-label="Filter by fish"></select>
+                </label>
+                <label>
+                  <span>Lure</span>
+                  <select id="lure-filter" aria-label="Filter by lure"></select>
+                </label>
+                <button class="ghost icon-button" id="fit-map-btn" type="button" title="Fit catches on map" aria-label="Fit catches on map">
+                  <i data-lucide="maximize-2"></i>
+                </button>
+              </div>
+            </div>
+            <div id="map" role="application" aria-label="Map of catch locations"></div>
+          </section>
+
+          <section class="stats-grid" aria-label="Catch insights">
+            <div class="stat"><span>Catches</span><strong id="total-count">0</strong></div>
+            <div class="stat"><span>Best Time</span><strong id="best-time">No data</strong></div>
+            <div class="stat"><span>Top Fish</span><strong id="top-fish">No data</strong></div>
+            <div class="stat"><span>Hot Spot</span><strong id="top-spot">No data</strong></div>
+          </section>
+
+          <section class="insight-grid">
+            <div class="subpanel">
+              <h3>Time of Day</h3>
+              <div id="time-bars"></div>
+            </div>
+            <div class="subpanel">
+              <h3>Lures</h3>
+              <ul class="ranking" id="lure-ranking"></ul>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="section-title">
+              <div>
+                <h2>Catch History</h2>
+                <p>Newest catches appear first.</p>
+              </div>
+              <button class="ghost" id="seed-btn" type="button" title="Add sample catches">
+                <i data-lucide="sparkles"></i>Samples
+              </button>
+            </div>
+            <ul class="catch-list" id="catch-list"></ul>
+          </section>
+        </section>
+      </div>
+    </main>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="/app.js?v=4"></script>
+  </body>
+</html>
