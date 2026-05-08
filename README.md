@@ -37,6 +37,8 @@ This is for catch logging, not regulation guidance. Marine area openings, retent
 
 Catch data stays in the current browser unless exported. GPS is only requested when pressing `Use GPS`.
 
+See [SECURITY.md](SECURITY.md) for the current privacy model and the launch hardening checklist.
+
 For long-term multi-device use, the next secure step is an authenticated backend with:
 
 - Sign in with Apple or passkeys.

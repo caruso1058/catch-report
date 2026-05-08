@@ -1,5 +1,13 @@
-const CACHE_NAME = "catch-report-v2";
-const APP_SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/public/manifest.webmanifest", "/public/icon.svg"];
+const CACHE_NAME = "catch-report-v3";
+const APP_SHELL = [
+  "/",
+  "/index.html",
+  "/styles.css",
+  "/app.js",
+  "/icons.js",
+  "/public/manifest.webmanifest",
+  "/public/icon.svg",
+];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
