@@ -1,5 +1,6 @@
 const STORAGE_KEY = "catch-report:catches:v1";
 const LOCAL_CHANGE_EVENT = "catchreport:local-change";
+const MAP_PADDING = 30;
 const LAKE_MARGARET = {
   id: "lake-margaret",
   name: "Lake Margaret",
@@ -174,12 +175,11 @@ const sampleCatches = [
 const state = {
   catches: loadCatches(),
   map: null,
-  markers: L.layerGroup(),
-  hotspotLayer: L.layerGroup(),
-  tempMarker: null,
+  mapCanvas: null,
+  mapContext: null,
+  mapBounds: null,
   selectedLatLng: null,
   activeAreaId: LAKE_MARGARET.id,
-  mapRenderer: null,
   shouldFitMap: false,
   suppressSyncEvent: false,
   filters: {
@@ -203,8 +203,6 @@ const els = {
   notes: document.querySelector("#notes"),
   locateBtn: document.querySelector("#locate-btn"),
   useAreaBtn: document.querySelector("#area-btn"),
-  exportBtn: document.querySelector("#export-btn"),
-  importFile: document.querySelector("#import-file"),
   seedBtn: document.querySelector("#seed-btn"),
   resetBtn: document.querySelector("#reset-btn"),
   totalCount: document.querySelector("#total-count"),
@@ -216,6 +214,8 @@ const els = {
   fishFilter: document.querySelector("#fish-filter"),
   lureFilter: document.querySelector("#lure-filter"),
   fitMapBtn: document.querySelector("#fit-map-btn"),
+  mapEl: document.querySelector("#map"),
+  mapCanvas: document.querySelector("#map-canvas"),
   filterSummary: document.querySelector("#filter-summary"),
   positionButtons: document.querySelectorAll("[data-position]"),
   timeBars: document.querySelector("#time-bars"),
@@ -254,8 +254,6 @@ function bindEvents() {
     button.addEventListener("click", () => applyQuickPosition(button.dataset.position, { moveMap: true }));
   });
   els.form.addEventListener("submit", saveCatch);
-  els.exportBtn.addEventListener("click", exportData);
-  els.importFile.addEventListener("change", importData);
   els.seedBtn.addEventListener("click", () => {
     state.catches = [
       ...sampleCatches.map((entry) => ({ ...entry, updatedAt: new Date().toISOString() })),
@@ -271,6 +269,8 @@ function bindEvents() {
   });
   els.areaFilter.addEventListener("change", (event) => {
     state.filters.area = event.target.value;
+    const area = waterAreas.find((item) => item.name === state.filters.area);
+    if (area) state.mapBounds = boundsAroundArea(area);
     render();
   });
   els.lureFilter.addEventListener("change", (event) => {
@@ -284,29 +284,25 @@ function bindEvents() {
 }
 
 function initMap() {
-  state.mapRenderer = L.canvas({ padding: 0.35 });
-  state.map = L.map("map", {
-    zoomControl: false,
-    preferCanvas: true,
-    renderer: state.mapRenderer,
-    tap: false,
-    zoomAnimation: false,
-    markerZoomAnimation: false,
-    fadeAnimation: false,
-  }).setView([LAKE_MARGARET.lat, LAKE_MARGARET.lng], LAKE_MARGARET.zoom);
+  state.map = true;
+  state.mapCanvas = els.mapCanvas;
+  state.mapContext = els.mapCanvas.getContext("2d");
+  state.mapBounds = boundsAroundArea(LAKE_MARGARET);
 
-  L.control.zoom({ position: "bottomright" }).addTo(state.map);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap",
-  }).addTo(state.map);
-
-  state.markers.addTo(state.map);
-  state.hotspotLayer.addTo(state.map);
-
-  state.map.on("click", (event) => {
-    setSelectedLocation(event.latlng.lat, event.latlng.lng, "Dropped pin");
+  state.mapCanvas.addEventListener("click", (event) => {
+    const rect = state.mapCanvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const coords = screenToLatLng(x, y, state.mapBounds, rect.width, rect.height);
+    setSelectedLocation(coords.lat, coords.lng, "Dropped pin");
+    renderMap(getFilteredCatches());
   });
+
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(() => renderMap(getFilteredCatches())).observe(els.mapEl);
+  } else {
+    window.addEventListener("resize", () => renderMap(getFilteredCatches()));
+  }
 }
 
 function populateAreaSelect() {
@@ -324,7 +320,10 @@ function applyAreaPreset(areaId, options = {}) {
   toggleOtherField(els.fish, els.fishOther);
   toggleOtherField(els.lure, els.lureOther);
   setSelectedLocation(area.lat, area.lng, area.name);
-  if (options.moveMap && state.map) state.map.setView([area.lat, area.lng], area.zoom);
+  if (options.moveMap && state.map) {
+    state.mapBounds = boundsAroundArea(area);
+    renderMap(getFilteredCatches());
+  }
 }
 
 function getActiveArea() {
@@ -340,7 +339,10 @@ function applyQuickPosition(position, options = {}) {
   const coords = getPositionCoordinates(area, position);
   const label = position === "center" ? area.name : `${capitalize(position)} ${area.waterType === "Saltwater" ? "area" : "shore"}`;
   setSelectedLocation(coords.lat, coords.lng, label);
-  if (options.moveMap && state.map) state.map.setView([coords.lat, coords.lng], Math.max(area.zoom, 13));
+  if (options.moveMap && state.map) {
+    state.mapBounds = boundsAroundPoint(coords, area);
+    renderMap(getFilteredCatches());
+  }
 }
 
 function getPositionCoordinates(area, position) {
@@ -376,7 +378,8 @@ function useCurrentLocation() {
     (position) => {
       const { latitude, longitude } = position.coords;
       setSelectedLocation(latitude, longitude, "Current location");
-      state.map.setView([latitude, longitude], 16);
+      state.mapBounds = boundsAroundPoint({ lat: latitude, lng: longitude }, getActiveArea());
+      renderMap(getFilteredCatches());
       showPrivacy("GPS location filled in.");
     },
     () => {
@@ -431,15 +434,7 @@ function setSelectedLocation(lat, lng, name = "") {
   els.lat.value = lat.toFixed(6);
   els.lng.value = lng.toFixed(6);
   if (name) els.locationName.value = name;
-
-  if (state.map) {
-    if (state.tempMarker) {
-      state.tempMarker.setLatLng([lat, lng]);
-    } else {
-      state.tempMarker = L.marker([lat, lng], { opacity: 0.78 }).addTo(state.map);
-    }
-    state.tempMarker.bindPopup("Selected catch location");
-  }
+  if (state.map) renderMap(getFilteredCatches());
 }
 
 function resetForm(options = {}) {
@@ -511,42 +506,111 @@ function renderStats(catches) {
 }
 
 function renderMap(catches) {
-  state.markers.clearLayers();
-  state.hotspotLayer.clearLayers();
+  const canvas = state.mapCanvas;
+  const context = state.mapContext;
+  if (!canvas || !context) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  const width = Math.max(320, Math.floor(rect.width));
+  const height = Math.max(280, Math.floor(rect.height));
+  if (canvas.width !== width * scale || canvas.height !== height * scale) {
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+  }
+
+  context.setTransform(scale, 0, 0, scale, 0, 0);
+  context.clearRect(0, 0, width, height);
+
+  if (state.shouldFitMap && catches.length > 0) {
+    state.mapBounds = boundsForCatches(catches);
+    state.shouldFitMap = false;
+  }
+
+  const bounds = state.mapBounds || boundsAroundArea(getActiveArea());
+  state.mapBounds = bounds;
+  drawMapBase(context, width, height, bounds);
 
   const groups = groupNearby(catches);
   groups.forEach((group) => {
-    const intensity = Math.min(0.55, 0.16 + group.items.length * 0.07);
-    L.circle([group.lat, group.lng], {
-      radius: Math.max(38, Math.min(170, group.items.length * 34)),
-      color: "#f1763a",
-      fillColor: "#f1763a",
-      fillOpacity: intensity,
-      weight: 1,
-      renderer: state.mapRenderer,
-    })
-      .bindPopup(`${group.items.length} catches near ${escapeHtml(group.items[0].locationName)}`)
-      .addTo(state.hotspotLayer);
+    const point = latLngToScreen(group.lat, group.lng, bounds, width, height);
+    const radius = Math.min(58, 18 + group.items.length * 8);
+    context.beginPath();
+    context.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    context.fillStyle = `rgba(241, 118, 58, ${Math.min(0.35, 0.12 + group.items.length * 0.04)})`;
+    context.fill();
+    context.strokeStyle = "rgba(241, 118, 58, 0.75)";
+    context.lineWidth = 1;
+    context.stroke();
   });
 
   catches.forEach((entry) => {
-    L.circleMarker([entry.lat, entry.lng], {
-      radius: 7,
-      color: "#0f3d38",
-      fillColor: "#f7c66b",
-      fillOpacity: 0.95,
-      weight: 2,
-      renderer: state.mapRenderer,
-    })
-      .bindPopup(`<strong>${escapeHtml(entry.fish)}</strong><br>${escapeHtml(getCatchAreaName(entry))}<br>${escapeHtml(entry.lure)}<br>${formatDateTime(entry.caughtAt)}`)
-      .addTo(state.markers);
+    const point = latLngToScreen(entry.lat, entry.lng, bounds, width, height);
+    context.beginPath();
+    context.arc(point.x, point.y, 7, 0, Math.PI * 2);
+    context.fillStyle = "#f7c66b";
+    context.fill();
+    context.lineWidth = 2.5;
+    context.strokeStyle = "#0f3d38";
+    context.stroke();
   });
 
-  if (state.shouldFitMap && catches.length > 0) {
-    const bounds = L.latLngBounds(catches.map((entry) => [entry.lat, entry.lng]));
-    state.map.fitBounds(bounds.pad(0.22), { maxZoom: 15, animate: false });
-    state.shouldFitMap = false;
+  if (state.selectedLatLng) {
+    const point = latLngToScreen(state.selectedLatLng.lat, state.selectedLatLng.lng, bounds, width, height);
+    context.beginPath();
+    context.arc(point.x, point.y, 11, 0, Math.PI * 2);
+    context.strokeStyle = "#ffffff";
+    context.lineWidth = 5;
+    context.stroke();
+    context.beginPath();
+    context.arc(point.x, point.y, 10, 0, Math.PI * 2);
+    context.strokeStyle = "#28666a";
+    context.lineWidth = 2;
+    context.stroke();
+    context.beginPath();
+    context.moveTo(point.x - 15, point.y);
+    context.lineTo(point.x + 15, point.y);
+    context.moveTo(point.x, point.y - 15);
+    context.lineTo(point.x, point.y + 15);
+    context.stroke();
   }
+}
+
+function drawMapBase(context, width, height, bounds) {
+  const gradient = context.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, "#c9dcd4");
+  gradient.addColorStop(0.52, "#dbe7dd");
+  gradient.addColorStop(1, "#b9d2d5");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+
+  context.fillStyle = "rgba(255, 253, 247, 0.42)";
+  context.beginPath();
+  context.ellipse(width * 0.22, height * 0.2, width * 0.36, height * 0.18, -0.25, 0, Math.PI * 2);
+  context.ellipse(width * 0.78, height * 0.78, width * 0.42, height * 0.2, -0.2, 0, Math.PI * 2);
+  context.fill();
+
+  context.strokeStyle = "rgba(15, 61, 56, 0.16)";
+  context.lineWidth = 1;
+  for (let i = 1; i < 4; i += 1) {
+    const x = MAP_PADDING + ((width - MAP_PADDING * 2) / 4) * i;
+    const y = MAP_PADDING + ((height - MAP_PADDING * 2) / 4) * i;
+    context.beginPath();
+    context.moveTo(x, MAP_PADDING);
+    context.lineTo(x, height - MAP_PADDING);
+    context.moveTo(MAP_PADDING, y);
+    context.lineTo(width - MAP_PADDING, y);
+    context.stroke();
+  }
+
+  context.fillStyle = "rgba(15, 61, 56, 0.72)";
+  context.font = "700 12px system-ui, sans-serif";
+  context.fillText("N", width / 2 - 4, 20);
+  context.fillText("S", width / 2 - 4, height - 12);
+  context.fillText("W", 12, height / 2 + 4);
+  context.fillText("E", width - 20, height / 2 + 4);
+  context.font = "650 13px system-ui, sans-serif";
+  context.fillText(`${bounds.label || "Selected water"} catch plot`, MAP_PADDING, height - MAP_PADDING + 18);
 }
 
 function renderList(catches) {
@@ -642,6 +706,88 @@ function groupNearby(catches) {
     }
   });
   return groups.sort((a, b) => b.items.length - a.items.length);
+}
+
+function boundsAroundArea(area) {
+  const span = area.span || { lat: 0.02, lng: 0.02 };
+  return padBounds(
+    {
+      north: area.lat + span.lat * 1.25,
+      south: area.lat - span.lat * 1.25,
+      east: area.lng + span.lng * 1.25,
+      west: area.lng - span.lng * 1.25,
+      label: area.name,
+    },
+    0,
+  );
+}
+
+function boundsAroundPoint(point, area) {
+  const span = area.span || { lat: 0.02, lng: 0.02 };
+  return padBounds(
+    {
+      north: point.lat + span.lat * 0.7,
+      south: point.lat - span.lat * 0.7,
+      east: point.lng + span.lng * 0.7,
+      west: point.lng - span.lng * 0.7,
+      label: area.name,
+    },
+    0,
+  );
+}
+
+function boundsForCatches(catches) {
+  const lats = catches.map((entry) => entry.lat);
+  const lngs = catches.map((entry) => entry.lng);
+  const label = state.filters.area !== "All" ? state.filters.area : "Filtered";
+  return padBounds(
+    {
+      north: Math.max(...lats),
+      south: Math.min(...lats),
+      east: Math.max(...lngs),
+      west: Math.min(...lngs),
+      label,
+    },
+    0.18,
+  );
+}
+
+function padBounds(bounds, ratio) {
+  const latSpan = Math.max(0.001, bounds.north - bounds.south);
+  const lngSpan = Math.max(0.001, bounds.east - bounds.west);
+  return {
+    ...bounds,
+    north: bounds.north + latSpan * ratio,
+    south: bounds.south - latSpan * ratio,
+    east: bounds.east + lngSpan * ratio,
+    west: bounds.west - lngSpan * ratio,
+  };
+}
+
+function latLngToScreen(lat, lng, bounds, width, height) {
+  const usableWidth = Math.max(1, width - MAP_PADDING * 2);
+  const usableHeight = Math.max(1, height - MAP_PADDING * 2);
+  const xRatio = (lng - bounds.west) / Math.max(0.000001, bounds.east - bounds.west);
+  const yRatio = (bounds.north - lat) / Math.max(0.000001, bounds.north - bounds.south);
+  return {
+    x: MAP_PADDING + clamp(xRatio, 0, 1) * usableWidth,
+    y: MAP_PADDING + clamp(yRatio, 0, 1) * usableHeight,
+  };
+}
+
+function screenToLatLng(x, y, bounds, width, height) {
+  const usableWidth = Math.max(1, width - MAP_PADDING * 2);
+  const usableHeight = Math.max(1, height - MAP_PADDING * 2);
+  const xRatio = clamp((x - MAP_PADDING) / usableWidth, 0, 1);
+  const yRatio = clamp((y - MAP_PADDING) / usableHeight, 0, 1);
+  return {
+    lat: bounds.north - yRatio * (bounds.north - bounds.south),
+    lng: bounds.west + xRatio * (bounds.east - bounds.west),
+  };
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function labelBestTime(catches) {
@@ -763,38 +909,6 @@ function getModifiedTime(entry) {
 
 function cloneCatches(catches) {
   return catches.map((entry) => ({ ...entry }));
-}
-
-function exportData() {
-  const blob = new Blob([JSON.stringify(state.catches, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `catch-report-${new Date().toISOString().slice(0, 10)}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function importData(event) {
-  const file = event.target.files?.[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const imported = JSON.parse(String(reader.result));
-      if (!Array.isArray(imported)) throw new Error("Expected an array");
-      state.catches = imported.filter(isValidCatch);
-      persist();
-      render();
-      showPrivacy("Imported catch history.");
-    } catch {
-      showPrivacy("That file did not look like a Catch Report export.");
-    } finally {
-      event.target.value = "";
-    }
-  };
-  reader.readAsText(file);
 }
 
 function isValidCatch(entry) {

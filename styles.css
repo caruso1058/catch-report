@@ -89,12 +89,6 @@ button {
   font-size: 0.88rem;
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .layout {
   display: grid;
   grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
@@ -302,10 +296,33 @@ textarea {
 }
 
 #map {
+  position: relative;
   height: min(56vh, 560px);
   min-height: 360px;
   width: 100%;
+  overflow: hidden;
   background: #cad9ce;
+  cursor: crosshair;
+  touch-action: manipulation;
+}
+
+#map-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#map-hint {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  border: 1px solid rgba(15, 61, 56, 0.16);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: var(--ink);
+  background: rgba(255, 253, 247, 0.78);
+  font-size: 0.78rem;
+  font-weight: 750;
 }
 
 .stats-grid {
@@ -525,25 +542,6 @@ textarea {
 @media (max-width: 620px) {
   .app-header {
     align-items: flex-start;
-  }
-
-  .header-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .header-actions .ghost,
-  .header-actions .file-button {
-    width: 42px;
-    padding: 0;
-  }
-
-  .header-actions span {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
   }
 
   .split,

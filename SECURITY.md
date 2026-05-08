@@ -8,7 +8,6 @@ Catch Report is public source code, but catch data is private by default.
 - If Firebase is configured and the user signs in, catches are also synced to that user's private Firestore path.
 - The Firebase path is `users/{uid}/catches/{catchId}`.
 - Location permission is requested only when the user presses `Use GPS`.
-- Exported JSON files are user-controlled backups and should be treated as private location data.
 
 ## Public Repository Safety
 
@@ -16,11 +15,9 @@ Making this repository public does not publish anyone's catches. The repo contai
 
 Do not commit exported catch JSON files, screenshots that reveal private fishing spots, API keys, analytics tokens, or backend credentials.
 
-## Current Network Caveat
+## Current Map Model
 
-The map uses OpenStreetMap tiles through Leaflet. Tile providers may receive network requests for the map area being viewed. Catch records are still not uploaded, but viewed map regions can be visible to the tile service through normal web requests.
-
-For a stricter privacy version, use a vetted map provider, self-host map tiles, or add a no-network map mode for logging catches without loading remote map tiles.
+The catch plot is rendered locally in the browser and does not load remote map tiles. GPS coordinates and catch points are not sent to a map tile provider.
 
 ## Hardening Already In Place
 

@@ -19,13 +19,12 @@ Open `http://127.0.0.1:4173/index.html`.
 - Fish and lure options adjust to the selected water type.
 - Location defaults to the selected water center and can be refined by GPS or map pin.
 - GPS fill-in when browser location permission is allowed.
-- Map pin selection for manual spot adjustment.
+- Fast local catch plot for manual spot adjustment, hotspots, and filtered catch review.
 - Local catch history persisted in `localStorage`.
 - Optional Firebase Auth and Firestore cloud sync.
 - Hotspot circles for nearby catch clusters.
 - Area, fish, and lure filters.
 - Best time-of-day, top fish, top lure, and top spot summaries.
-- JSON export/import for backups and device migration.
 - Basic PWA manifest and service worker for installability.
 
 ## Puget Sound Expansion
