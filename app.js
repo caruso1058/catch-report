@@ -780,7 +780,7 @@ function escapeHtml(value) {
 
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register("sw.js").then((registration) => registration.update()).catch(() => {});
   }
 }
 

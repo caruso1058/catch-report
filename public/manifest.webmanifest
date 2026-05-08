@@ -2,13 +2,13 @@
   "name": "Catch Report",
   "short_name": "Catch Report",
   "description": "Log fish catches and learn your best locations and times.",
-  "start_url": "/index.html",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#f5f3ee",
   "theme_color": "#0f3d38",
   "icons": [
     {
-      "src": "/public/icon.svg",
+      "src": "icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
