@@ -149,7 +149,7 @@
               </div>
             </div>
             <div id="map" role="application" aria-label="Catch plot">
-              <canvas id="map-canvas"></canvas>
+              <svg id="map-plot" viewBox="0 0 1000 520" preserveAspectRatio="none" aria-hidden="true"></svg>
               <span id="map-hint">Tap the plot to set a catch spot.</span>
             </div>
           </section>
@@ -178,9 +178,6 @@
                 <h2>Catch History</h2>
                 <p>Newest catches appear first.</p>
               </div>
-              <button class="ghost" id="seed-btn" type="button" title="Add sample catches">
-                <i data-lucide="sparkles"></i>Samples
-              </button>
             </div>
             <ul class="catch-list" id="catch-list"></ul>
           </section>

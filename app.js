@@ -113,70 +113,10 @@ const waterAreas = [
   },
 ];
 
-const sampleCatches = [
-  {
-    id: crypto.randomUUID(),
-    areaId: "lake-margaret",
-    areaName: "Lake Margaret",
-    waterType: "Freshwater lake",
-    fish: "Rainbow trout",
-    lure: "Spinner",
-    caughtAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
-    locationName: "North bank",
-    lat: 47.7681,
-    lng: -121.9018,
-    notes: "Cloudy, steady retrieve near the shade line.",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: crypto.randomUUID(),
-    areaId: "lake-margaret",
-    areaName: "Lake Margaret",
-    waterType: "Freshwater lake",
-    fish: "Largemouth bass",
-    lure: "Soft plastic",
-    caughtAt: new Date(Date.now() - 1000 * 60 * 60 * 73).toISOString(),
-    locationName: "South cove",
-    lat: 47.7647,
-    lng: -121.9007,
-    notes: "Hit close to weeds just before sunset.",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: crypto.randomUUID(),
-    areaId: "puget-sound",
-    areaName: "Puget Sound",
-    waterType: "Saltwater",
-    fish: "Coho salmon",
-    lure: "Trolling spoon",
-    caughtAt: new Date(Date.now() - 1000 * 60 * 60 * 97).toISOString(),
-    locationName: "Seattle shoreline",
-    lat: 47.6266,
-    lng: -122.4042,
-    notes: "Incoming tide, bait showing near the surface.",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: crypto.randomUUID(),
-    areaId: "lake-margaret",
-    areaName: "Lake Margaret",
-    waterType: "Freshwater lake",
-    fish: "Rainbow trout",
-    lure: "Spoon",
-    caughtAt: new Date(Date.now() - 1000 * 60 * 60 * 170).toISOString(),
-    locationName: "Launch side",
-    lat: 47.7669,
-    lng: -121.903,
-    notes: "Cool morning, slow retrieve.",
-    createdAt: new Date().toISOString(),
-  },
-];
-
 const state = {
   catches: loadCatches(),
   map: null,
-  mapCanvas: null,
-  mapContext: null,
+  mapPlot: null,
   mapBounds: null,
   selectedLatLng: null,
   activeAreaId: LAKE_MARGARET.id,
@@ -203,7 +143,6 @@ const els = {
   notes: document.querySelector("#notes"),
   locateBtn: document.querySelector("#locate-btn"),
   useAreaBtn: document.querySelector("#area-btn"),
-  seedBtn: document.querySelector("#seed-btn"),
   resetBtn: document.querySelector("#reset-btn"),
   totalCount: document.querySelector("#total-count"),
   bestTime: document.querySelector("#best-time"),
@@ -215,7 +154,7 @@ const els = {
   lureFilter: document.querySelector("#lure-filter"),
   fitMapBtn: document.querySelector("#fit-map-btn"),
   mapEl: document.querySelector("#map"),
-  mapCanvas: document.querySelector("#map-canvas"),
+  mapPlot: document.querySelector("#map-plot"),
   filterSummary: document.querySelector("#filter-summary"),
   positionButtons: document.querySelectorAll("[data-position]"),
   timeBars: document.querySelector("#time-bars"),
@@ -254,14 +193,6 @@ function bindEvents() {
     button.addEventListener("click", () => applyQuickPosition(button.dataset.position, { moveMap: true }));
   });
   els.form.addEventListener("submit", saveCatch);
-  els.seedBtn.addEventListener("click", () => {
-    state.catches = [
-      ...sampleCatches.map((entry) => ({ ...entry, updatedAt: new Date().toISOString() })),
-      ...state.catches,
-    ];
-    persist();
-    render();
-  });
   els.resetBtn.addEventListener("click", resetForm);
   els.fishFilter.addEventListener("change", (event) => {
     state.filters.fish = event.target.value;
@@ -285,12 +216,11 @@ function bindEvents() {
 
 function initMap() {
   state.map = true;
-  state.mapCanvas = els.mapCanvas;
-  state.mapContext = els.mapCanvas.getContext("2d");
+  state.mapPlot = els.mapPlot;
   state.mapBounds = boundsAroundArea(LAKE_MARGARET);
 
-  state.mapCanvas.addEventListener("click", (event) => {
-    const rect = state.mapCanvas.getBoundingClientRect();
+  els.mapEl.addEventListener("click", (event) => {
+    const rect = els.mapEl.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     const coords = screenToLatLng(x, y, state.mapBounds, rect.width, rect.height);
@@ -506,21 +436,11 @@ function renderStats(catches) {
 }
 
 function renderMap(catches) {
-  const canvas = state.mapCanvas;
-  const context = state.mapContext;
-  if (!canvas || !context) return;
+  const plot = state.mapPlot;
+  if (!plot) return;
 
-  const rect = canvas.getBoundingClientRect();
-  const scale = window.devicePixelRatio || 1;
-  const width = Math.max(320, Math.floor(rect.width));
-  const height = Math.max(280, Math.floor(rect.height));
-  if (canvas.width !== width * scale || canvas.height !== height * scale) {
-    canvas.width = width * scale;
-    canvas.height = height * scale;
-  }
-
-  context.setTransform(scale, 0, 0, scale, 0, 0);
-  context.clearRect(0, 0, width, height);
+  const width = 1000;
+  const height = 520;
 
   if (state.shouldFitMap && catches.length > 0) {
     state.mapBounds = boundsForCatches(catches);
@@ -529,88 +449,71 @@ function renderMap(catches) {
 
   const bounds = state.mapBounds || boundsAroundArea(getActiveArea());
   state.mapBounds = bounds;
-  drawMapBase(context, width, height, bounds);
 
   const groups = groupNearby(catches);
-  groups.forEach((group) => {
+  const hotspotMarkup = groups.map((group) => {
     const point = latLngToScreen(group.lat, group.lng, bounds, width, height);
     const radius = Math.min(58, 18 + group.items.length * 8);
-    context.beginPath();
-    context.arc(point.x, point.y, radius, 0, Math.PI * 2);
-    context.fillStyle = `rgba(241, 118, 58, ${Math.min(0.35, 0.12 + group.items.length * 0.04)})`;
-    context.fill();
-    context.strokeStyle = "rgba(241, 118, 58, 0.75)";
-    context.lineWidth = 1;
-    context.stroke();
-  });
+    const opacity = Math.min(0.35, 0.12 + group.items.length * 0.04);
+    return `<circle cx="${point.x}" cy="${point.y}" r="${radius}" fill="rgba(241,118,58,${opacity})" stroke="rgba(241,118,58,0.75)" stroke-width="2" />`;
+  }).join("");
 
-  catches.forEach((entry) => {
+  const catchMarkup = catches.map((entry) => {
     const point = latLngToScreen(entry.lat, entry.lng, bounds, width, height);
-    context.beginPath();
-    context.arc(point.x, point.y, 7, 0, Math.PI * 2);
-    context.fillStyle = "#f7c66b";
-    context.fill();
-    context.lineWidth = 2.5;
-    context.strokeStyle = "#0f3d38";
-    context.stroke();
-  });
+    return `<circle cx="${point.x}" cy="${point.y}" r="9" fill="#f7c66b" stroke="#0f3d38" stroke-width="4" />`;
+  }).join("");
 
+  let selectedMarkup = "";
   if (state.selectedLatLng) {
     const point = latLngToScreen(state.selectedLatLng.lat, state.selectedLatLng.lng, bounds, width, height);
-    context.beginPath();
-    context.arc(point.x, point.y, 11, 0, Math.PI * 2);
-    context.strokeStyle = "#ffffff";
-    context.lineWidth = 5;
-    context.stroke();
-    context.beginPath();
-    context.arc(point.x, point.y, 10, 0, Math.PI * 2);
-    context.strokeStyle = "#28666a";
-    context.lineWidth = 2;
-    context.stroke();
-    context.beginPath();
-    context.moveTo(point.x - 15, point.y);
-    context.lineTo(point.x + 15, point.y);
-    context.moveTo(point.x, point.y - 15);
-    context.lineTo(point.x, point.y + 15);
-    context.stroke();
+    selectedMarkup = `
+      <circle cx="${point.x}" cy="${point.y}" r="18" fill="none" stroke="#fffdf7" stroke-width="8" />
+      <circle cx="${point.x}" cy="${point.y}" r="16" fill="none" stroke="#28666a" stroke-width="4" />
+      <line x1="${point.x - 24}" y1="${point.y}" x2="${point.x + 24}" y2="${point.y}" stroke="#28666a" stroke-width="4" />
+      <line x1="${point.x}" y1="${point.y - 24}" x2="${point.x}" y2="${point.y + 24}" stroke="#28666a" stroke-width="4" />
+    `;
   }
+
+  plot.innerHTML = `
+    ${mapBaseMarkup(width, height, bounds)}
+    ${hotspotMarkup}
+    ${catchMarkup}
+    ${selectedMarkup}
+  `;
 }
 
-function drawMapBase(context, width, height, bounds) {
-  const gradient = context.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "#c9dcd4");
-  gradient.addColorStop(0.52, "#dbe7dd");
-  gradient.addColorStop(1, "#b9d2d5");
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, width, height);
+function mapBaseMarkup(width, height, bounds) {
+  const grid = [1, 2, 3]
+    .map((i) => {
+      const x = MAP_PADDING + ((width - MAP_PADDING * 2) / 4) * i;
+      const y = MAP_PADDING + ((height - MAP_PADDING * 2) / 4) * i;
+      return `
+        <line x1="${x}" y1="${MAP_PADDING}" x2="${x}" y2="${height - MAP_PADDING}" />
+        <line x1="${MAP_PADDING}" y1="${y}" x2="${width - MAP_PADDING}" y2="${y}" />
+      `;
+    })
+    .join("");
 
-  context.fillStyle = "rgba(255, 253, 247, 0.42)";
-  context.beginPath();
-  context.ellipse(width * 0.22, height * 0.2, width * 0.36, height * 0.18, -0.25, 0, Math.PI * 2);
-  context.ellipse(width * 0.78, height * 0.78, width * 0.42, height * 0.2, -0.2, 0, Math.PI * 2);
-  context.fill();
-
-  context.strokeStyle = "rgba(15, 61, 56, 0.16)";
-  context.lineWidth = 1;
-  for (let i = 1; i < 4; i += 1) {
-    const x = MAP_PADDING + ((width - MAP_PADDING * 2) / 4) * i;
-    const y = MAP_PADDING + ((height - MAP_PADDING * 2) / 4) * i;
-    context.beginPath();
-    context.moveTo(x, MAP_PADDING);
-    context.lineTo(x, height - MAP_PADDING);
-    context.moveTo(MAP_PADDING, y);
-    context.lineTo(width - MAP_PADDING, y);
-    context.stroke();
-  }
-
-  context.fillStyle = "rgba(15, 61, 56, 0.72)";
-  context.font = "700 12px system-ui, sans-serif";
-  context.fillText("N", width / 2 - 4, 20);
-  context.fillText("S", width / 2 - 4, height - 12);
-  context.fillText("W", 12, height / 2 + 4);
-  context.fillText("E", width - 20, height / 2 + 4);
-  context.font = "650 13px system-ui, sans-serif";
-  context.fillText(`${bounds.label || "Selected water"} catch plot`, MAP_PADDING, height - MAP_PADDING + 18);
+  return `
+    <defs>
+      <linearGradient id="plot-bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#c9dcd4" />
+        <stop offset="52%" stop-color="#dbe7dd" />
+        <stop offset="100%" stop-color="#b9d2d5" />
+      </linearGradient>
+    </defs>
+    <rect width="${width}" height="${height}" fill="url(#plot-bg)" />
+    <ellipse cx="${width * 0.22}" cy="${height * 0.2}" rx="${width * 0.36}" ry="${height * 0.18}" fill="rgba(255,253,247,0.42)" transform="rotate(-14 ${width * 0.22} ${height * 0.2})" />
+    <ellipse cx="${width * 0.78}" cy="${height * 0.78}" rx="${width * 0.42}" ry="${height * 0.2}" fill="rgba(255,253,247,0.42)" transform="rotate(-11 ${width * 0.78} ${height * 0.78})" />
+    <g stroke="rgba(15,61,56,0.16)" stroke-width="2">${grid}</g>
+    <g fill="rgba(15,61,56,0.72)" font-family="system-ui, sans-serif" font-size="18" font-weight="800">
+      <text x="${width / 2}" y="28" text-anchor="middle">N</text>
+      <text x="${width / 2}" y="${height - 14}" text-anchor="middle">S</text>
+      <text x="20" y="${height / 2 + 6}">W</text>
+      <text x="${width - 28}" y="${height / 2 + 6}">E</text>
+    </g>
+    <text x="${MAP_PADDING}" y="${height - MAP_PADDING + 18}" fill="rgba(15,61,56,0.72)" font-family="system-ui, sans-serif" font-size="18" font-weight="750">${escapeHtml(bounds.label || "Selected water")} catch plot</text>
+  `;
 }
 
 function renderList(catches) {

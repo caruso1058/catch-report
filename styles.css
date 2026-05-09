@@ -306,7 +306,7 @@ textarea {
   touch-action: manipulation;
 }
 
-#map-canvas {
+#map-plot {
   display: block;
   width: 100%;
   height: 100%;
