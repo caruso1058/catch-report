@@ -64,3 +64,5 @@ users/{userId}/catches/{catchId}
 ```
 
 The rules only allow a signed-in user to read and write their own catch documents.
+
+If the Sign in button does not complete, check the app's cloud sync message. The most common fixes are enabling the Google provider or adding `caruso1058.github.io` under Authentication > Settings > Authorized domains.

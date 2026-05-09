@@ -9,6 +9,7 @@ let currentUser = null;
 let unsubscribe = null;
 let cloudReady = false;
 let syncTimer = null;
+let popupFailed = false;
 
 if (!appApi) {
   throw new Error("Catch Report app API was not ready before Firebase sync loaded.");
@@ -27,20 +28,22 @@ if (!firebaseEnabled || !firebaseConfig.projectId) {
 async function bootFirebase() {
   firebase = await loadFirebaseSdk();
   provider = new firebase.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
   const firebaseApp = firebase.initializeApp(firebaseConfig);
   auth = firebase.getAuth(firebaseApp);
   db = firebase.getFirestore(firebaseApp);
+  await firebase.setPersistence(auth, firebase.browserLocalPersistence);
 
   appApi.setSyncStatus("Cloud sync ready. Sign in to back up catches.");
   appApi.setAuthControls({
     configured: true,
     signedIn: false,
-    signIn: () => firebase.signInWithRedirect(auth, provider),
+    signIn,
     signOut: () => firebase.signOut(auth),
   });
 
-  firebase.getRedirectResult(auth).catch(() => {
-    appApi.setSyncStatus("Sign-in did not complete. Try again.");
+  firebase.getRedirectResult(auth).catch((error) => {
+    appApi.setSyncStatus(authErrorMessage(error));
   });
 
   window.addEventListener("catchreport:local-change", (event) => {
@@ -58,7 +61,7 @@ async function bootFirebase() {
       appApi.setAuthControls({
         configured: true,
         signedIn: false,
-        signIn: () => firebase.signInWithRedirect(auth, provider),
+        signIn,
         signOut: () => firebase.signOut(auth),
       });
       return;
@@ -68,11 +71,61 @@ async function bootFirebase() {
     appApi.setAuthControls({
       configured: true,
       signedIn: true,
-      signIn: () => firebase.signInWithRedirect(auth, provider),
+      signIn,
       signOut: () => firebase.signOut(auth),
     });
     subscribeToCatches(user.uid);
   });
+}
+
+async function signIn() {
+  appApi.setSyncStatus("Opening Google sign-in...");
+
+  try {
+    await firebase.signInWithPopup(auth, provider);
+  } catch (error) {
+    if (shouldTryRedirect(error)) {
+      popupFailed = true;
+      appApi.setSyncStatus("Popup was blocked. Redirecting to Google sign-in...");
+      await firebase.signInWithRedirect(auth, provider);
+      return;
+    }
+
+    appApi.setSyncStatus(authErrorMessage(error));
+  }
+}
+
+function shouldTryRedirect(error) {
+  return (
+    !popupFailed &&
+    ["auth/popup-blocked", "auth/operation-not-supported-in-this-environment"].includes(error?.code)
+  );
+}
+
+function authErrorMessage(error) {
+  const code = error?.code || "";
+
+  if (code === "auth/unauthorized-domain") {
+    return "Sign-in blocked: add caruso1058.github.io to Firebase Auth authorized domains.";
+  }
+
+  if (code === "auth/operation-not-allowed") {
+    return "Sign-in blocked: enable Google in Firebase Authentication.";
+  }
+
+  if (code === "auth/popup-closed-by-user") {
+    return "Sign-in was cancelled before it finished.";
+  }
+
+  if (code === "auth/popup-blocked") {
+    return "Sign-in popup was blocked. Open in Safari and try again.";
+  }
+
+  if (code === "auth/network-request-failed") {
+    return "Sign-in failed because the network request did not complete.";
+  }
+
+  return `Sign-in failed${code ? ` (${code})` : ""}. Check Firebase Auth setup.`;
 }
 
 async function loadFirebaseSdk() {
