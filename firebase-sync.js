@@ -19,8 +19,8 @@ if (!firebaseEnabled || !firebaseConfig.projectId) {
   appApi.setSyncStatus("Cloud sync is off until Firebase is configured.");
   appApi.setAuthControls({ configured: false, signedIn: false });
 } else {
-  bootFirebase().catch(() => {
-    appApi.setSyncStatus("Cloud sync could not load. Check network and Firebase config.");
+  bootFirebase().catch((error) => {
+    appApi.setSyncStatus(authErrorMessage(error, "Cloud sync could not load"));
     appApi.setAuthControls({ configured: false, signedIn: false });
   });
 }
@@ -82,6 +82,11 @@ async function signIn() {
   appApi.setSyncStatus("Opening Google sign-in...");
 
   try {
+    if (isStandaloneIos()) {
+      await firebase.signInWithRedirect(auth, provider);
+      return;
+    }
+
     await firebase.signInWithPopup(auth, provider);
   } catch (error) {
     if (shouldTryRedirect(error)) {
@@ -91,7 +96,7 @@ async function signIn() {
       return;
     }
 
-    appApi.setSyncStatus(authErrorMessage(error));
+    appApi.setSyncStatus(authErrorMessage(error, "Sign-in failed"));
   }
 }
 
@@ -102,30 +107,40 @@ function shouldTryRedirect(error) {
   );
 }
 
-function authErrorMessage(error) {
+function isStandaloneIos() {
+  const isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  return isiOS && window.navigator.standalone === true;
+}
+
+function authErrorMessage(error, prefix = "Sign-in failed") {
   const code = error?.code || "";
+  const suffix = code ? ` (${code})` : "";
 
   if (code === "auth/unauthorized-domain") {
-    return "Sign-in blocked: add caruso1058.github.io to Firebase Auth authorized domains.";
+    return `${prefix}: add caruso1058.github.io to Firebase Auth authorized domains${suffix}.`;
   }
 
   if (code === "auth/operation-not-allowed") {
-    return "Sign-in blocked: enable Google in Firebase Authentication.";
+    return `${prefix}: enable Google in Firebase Authentication > Sign-in method${suffix}.`;
   }
 
   if (code === "auth/popup-closed-by-user") {
-    return "Sign-in was cancelled before it finished.";
+    return `${prefix}: the Google popup was closed before it finished${suffix}.`;
   }
 
   if (code === "auth/popup-blocked") {
-    return "Sign-in popup was blocked. Open in Safari and try again.";
+    return `${prefix}: popup was blocked. Open in Safari and try again${suffix}.`;
   }
 
   if (code === "auth/network-request-failed") {
-    return "Sign-in failed because the network request did not complete.";
+    return `${prefix}: network request did not complete${suffix}.`;
   }
 
-  return `Sign-in failed${code ? ` (${code})` : ""}. Check Firebase Auth setup.`;
+  if (code === "auth/internal-error") {
+    return `${prefix}: Firebase Auth internal error. Check Google provider and authorized domains${suffix}.`;
+  }
+
+  return `${prefix}${suffix}. Check Firebase Auth setup.`;
 }
 
 async function loadFirebaseSdk() {
