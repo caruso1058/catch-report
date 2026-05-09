@@ -19,7 +19,8 @@ Open `http://127.0.0.1:4173/index.html`.
 - Fish and lure options adjust to the selected water type.
 - Location defaults to the selected water center and can be refined by GPS or map pin.
 - GPS fill-in when browser location permission is allowed.
-- Fast local catch plot for manual spot adjustment, hotspots, and filtered catch review.
+- OpenLayers map for manual spot adjustment, hotspots, and filtered catch review.
+- Lightweight SVG fallback if the map library cannot load.
 - Local catch history persisted in `localStorage`.
 - Optional Firebase Auth and Firestore cloud sync.
 - Hotspot circles for nearby catch clusters.

@@ -116,6 +116,10 @@ const waterAreas = [
 const state = {
   catches: loadCatches(),
   map: null,
+  mapMode: "plot",
+  olMap: null,
+  olVectorSource: null,
+  olCatchLayer: null,
   mapPlot: null,
   mapBounds: null,
   selectedLatLng: null,
@@ -154,6 +158,7 @@ const els = {
   lureFilter: document.querySelector("#lure-filter"),
   fitMapBtn: document.querySelector("#fit-map-btn"),
   mapEl: document.querySelector("#map"),
+  mapView: document.querySelector("#map-view"),
   mapPlot: document.querySelector("#map-plot"),
   filterSummary: document.querySelector("#filter-summary"),
   positionButtons: document.querySelectorAll("[data-position]"),
@@ -215,9 +220,68 @@ function bindEvents() {
 }
 
 function initMap() {
-  state.map = true;
   state.mapPlot = els.mapPlot;
   state.mapBounds = boundsAroundArea(LAKE_MARGARET);
+
+  if (window.ol) {
+    initOpenLayersMap();
+    return;
+  }
+
+  initPlotFallback();
+}
+
+function initOpenLayersMap() {
+  state.map = true;
+  state.mapMode = "openlayers";
+  els.mapPlot.hidden = true;
+  els.mapView.hidden = false;
+
+  state.olVectorSource = new ol.source.Vector();
+  state.olCatchLayer = new ol.layer.Vector({
+    source: state.olVectorSource,
+    style: styleMapFeature,
+    updateWhileInteracting: false,
+    updateWhileAnimating: false,
+  });
+
+  state.olMap = new ol.Map({
+    target: els.mapView,
+    layers: [
+      new ol.layer.Tile({
+        source: new ol.source.OSM({
+          crossOrigin: "anonymous",
+        }),
+      }),
+      state.olCatchLayer,
+    ],
+    controls: ol.control.defaults.defaults({
+      attribution: false,
+      rotate: false,
+      zoom: false,
+    }),
+    interactions: ol.interaction.defaults.defaults({
+      pinchRotate: false,
+      altShiftDragRotate: false,
+    }),
+    view: new ol.View({
+      center: ol.proj.fromLonLat([LAKE_MARGARET.lng, LAKE_MARGARET.lat]),
+      zoom: LAKE_MARGARET.zoom,
+      maxZoom: 19,
+    }),
+  });
+
+  state.olMap.on("singleclick", (event) => {
+    const [lng, lat] = ol.proj.toLonLat(event.coordinate);
+    setSelectedLocation(lat, lng, "Dropped pin");
+  });
+}
+
+function initPlotFallback() {
+  state.map = true;
+  state.mapMode = "plot";
+  els.mapView.hidden = true;
+  els.mapPlot.hidden = false;
 
   els.mapEl.addEventListener("click", (event) => {
     const rect = els.mapEl.getBoundingClientRect();
@@ -252,6 +316,7 @@ function applyAreaPreset(areaId, options = {}) {
   setSelectedLocation(area.lat, area.lng, area.name);
   if (options.moveMap && state.map) {
     state.mapBounds = boundsAroundArea(area);
+    setMapView(area.lat, area.lng, area.zoom);
     renderMap(getFilteredCatches());
   }
 }
@@ -271,6 +336,7 @@ function applyQuickPosition(position, options = {}) {
   setSelectedLocation(coords.lat, coords.lng, label);
   if (options.moveMap && state.map) {
     state.mapBounds = boundsAroundPoint(coords, area);
+    setMapView(coords.lat, coords.lng, Math.max(area.zoom, 13));
     renderMap(getFilteredCatches());
   }
 }
@@ -309,6 +375,7 @@ function useCurrentLocation() {
       const { latitude, longitude } = position.coords;
       setSelectedLocation(latitude, longitude, "Current location");
       state.mapBounds = boundsAroundPoint({ lat: latitude, lng: longitude }, getActiveArea());
+      setMapView(latitude, longitude, 16);
       renderMap(getFilteredCatches());
       showPrivacy("GPS location filled in.");
     },
@@ -436,6 +503,95 @@ function renderStats(catches) {
 }
 
 function renderMap(catches) {
+  if (state.mapMode === "openlayers") {
+    renderOpenLayersMap(catches);
+    return;
+  }
+
+  renderPlotFallback(catches);
+}
+
+function renderOpenLayersMap(catches) {
+  if (!state.olMap || !state.olVectorSource) return;
+
+  state.olVectorSource.clear();
+
+  if (state.shouldFitMap && catches.length > 0) {
+    const extent = ol.extent.createEmpty();
+    catches.forEach((entry) => {
+      ol.extent.extendCoordinate(extent, ol.proj.fromLonLat([entry.lng, entry.lat]));
+    });
+    state.olMap.getView().fit(extent, {
+      padding: [42, 42, 42, 42],
+      maxZoom: 15,
+      duration: 0,
+    });
+    state.shouldFitMap = false;
+  }
+
+  groupNearby(catches).forEach((group) => {
+    const feature = new ol.Feature({
+      geometry: new ol.geom.Point(ol.proj.fromLonLat([group.lng, group.lat])),
+      kind: "hotspot",
+      count: group.items.length,
+    });
+    state.olVectorSource.addFeature(feature);
+  });
+
+  catches.forEach((entry) => {
+    const feature = new ol.Feature({
+      geometry: new ol.geom.Point(ol.proj.fromLonLat([entry.lng, entry.lat])),
+      kind: "catch",
+      fish: entry.fish,
+    });
+    state.olVectorSource.addFeature(feature);
+  });
+
+  if (state.selectedLatLng) {
+    const feature = new ol.Feature({
+      geometry: new ol.geom.Point(ol.proj.fromLonLat([state.selectedLatLng.lng, state.selectedLatLng.lat])),
+      kind: "selected",
+    });
+    state.olVectorSource.addFeature(feature);
+  }
+
+  state.olMap.updateSize();
+}
+
+function styleMapFeature(feature) {
+  const kind = feature.get("kind");
+
+  if (kind === "hotspot") {
+    const count = feature.get("count") || 1;
+    return new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: Math.min(48, 18 + count * 7),
+        fill: new ol.style.Fill({ color: `rgba(241,118,58,${Math.min(0.35, 0.12 + count * 0.04)})` }),
+        stroke: new ol.style.Stroke({ color: "rgba(241,118,58,0.75)", width: 2 }),
+      }),
+    });
+  }
+
+  if (kind === "selected") {
+    return new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 13,
+        fill: new ol.style.Fill({ color: "rgba(255,253,247,0.25)" }),
+        stroke: new ol.style.Stroke({ color: "#28666a", width: 4 }),
+      }),
+    });
+  }
+
+  return new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 7,
+      fill: new ol.style.Fill({ color: "#f7c66b" }),
+      stroke: new ol.style.Stroke({ color: "#0f3d38", width: 3 }),
+    }),
+  });
+}
+
+function renderPlotFallback(catches) {
   const plot = state.mapPlot;
   if (!plot) return;
 
@@ -480,6 +636,13 @@ function renderMap(catches) {
     ${catchMarkup}
     ${selectedMarkup}
   `;
+}
+
+function setMapView(lat, lng, zoom) {
+  if (state.mapMode !== "openlayers" || !state.olMap) return;
+  state.olMap.getView().setCenter(ol.proj.fromLonLat([lng, lat]));
+  state.olMap.getView().setZoom(zoom);
+  state.olMap.updateSize();
 }
 
 function mapBaseMarkup(width, height, bounds) {

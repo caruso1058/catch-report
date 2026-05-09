@@ -1,4 +1,4 @@
-const CACHE_NAME = "catch-report-v7";
+const CACHE_NAME = "catch-report-v8";
 const APP_SHELL = [
   "./",
   "index.html",

@@ -17,7 +17,7 @@ Do not commit exported catch JSON files, screenshots that reveal private fishing
 
 ## Current Map Model
 
-The catch plot is rendered locally in the browser and does not load remote map tiles. GPS coordinates and catch points are not sent to a map tile provider.
+The primary map uses OpenLayers with OpenStreetMap tiles. Tile providers may receive normal map-tile requests for the area being viewed, but catch records are not uploaded to the map provider. If the map library cannot load, the app falls back to a local SVG catch plot.
 
 ## Hardening Already In Place
 
