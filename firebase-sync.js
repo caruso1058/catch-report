@@ -9,7 +9,6 @@ let currentUser = null;
 let unsubscribe = null;
 let cloudReady = false;
 let syncTimer = null;
-let popupFailed = false;
 
 if (!appApi) {
   throw new Error("Catch Report app API was not ready before Firebase sync loaded.");
@@ -28,6 +27,8 @@ if (!firebaseEnabled || !firebaseConfig.projectId) {
 async function bootFirebase() {
   firebase = await loadFirebaseSdk();
   provider = new firebase.GoogleAuthProvider();
+  provider.addScope("email");
+  provider.addScope("profile");
   provider.setCustomParameters({ prompt: "select_account" });
   const firebaseApp = firebase.initializeApp(firebaseConfig);
   auth = firebase.getAuth(firebaseApp);
@@ -40,10 +41,6 @@ async function bootFirebase() {
     signedIn: false,
     signIn,
     signOut: () => firebase.signOut(auth),
-  });
-
-  firebase.getRedirectResult(auth).catch((error) => {
-    appApi.setSyncStatus(authErrorMessage(error));
   });
 
   window.addEventListener("catchreport:local-change", (event) => {
@@ -82,39 +79,17 @@ async function signIn() {
   appApi.setSyncStatus("Opening Google sign-in...");
 
   try {
-    if (isStandaloneIos()) {
-      await firebase.signInWithRedirect(auth, provider);
-      return;
-    }
-
     await firebase.signInWithPopup(auth, provider);
   } catch (error) {
-    if (shouldTryRedirect(error)) {
-      popupFailed = true;
-      appApi.setSyncStatus("Popup was blocked. Redirecting to Google sign-in...");
-      await firebase.signInWithRedirect(auth, provider);
-      return;
-    }
-
+    console.error("Firebase sign-in failed", error);
     appApi.setSyncStatus(authErrorMessage(error, "Sign-in failed"));
   }
 }
 
-function shouldTryRedirect(error) {
-  return (
-    !popupFailed &&
-    ["auth/popup-blocked", "auth/operation-not-supported-in-this-environment"].includes(error?.code)
-  );
-}
-
-function isStandaloneIos() {
-  const isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  return isiOS && window.navigator.standalone === true;
-}
-
 function authErrorMessage(error, prefix = "Sign-in failed") {
   const code = error?.code || "";
-  const suffix = code ? ` (${code})` : "";
+  const detail = authErrorDetail(error);
+  const suffix = code ? ` (${[code, detail].filter(Boolean).join(": ")})` : detail ? ` (${detail})` : "";
 
   if (code === "auth/unauthorized-domain") {
     return `${prefix}: add caruso1058.github.io to Firebase Auth authorized domains${suffix}.`;
@@ -129,7 +104,11 @@ function authErrorMessage(error, prefix = "Sign-in failed") {
   }
 
   if (code === "auth/popup-blocked") {
-    return `${prefix}: popup was blocked. Open in Safari and try again${suffix}.`;
+    return `${prefix}: popup was blocked. Open the app in Safari or Chrome and allow the Google popup${suffix}.`;
+  }
+
+  if (code === "auth/operation-not-supported-in-this-environment") {
+    return `${prefix}: this browser cannot open the Google popup. Open the app in Safari or Chrome and try again${suffix}.`;
   }
 
   if (code === "auth/network-request-failed") {
@@ -137,10 +116,20 @@ function authErrorMessage(error, prefix = "Sign-in failed") {
   }
 
   if (code === "auth/internal-error") {
-    return `${prefix}: Firebase Auth internal error. Check Google provider and authorized domains${suffix}.`;
+    return `${prefix}: Firebase Auth internal error. This is usually an auth domain, referrer, or Google provider setup issue${suffix}.`;
   }
 
   return `${prefix}${suffix}. Check Firebase Auth setup.`;
+}
+
+function authErrorDetail(error) {
+  const tokenMessage = error?.customData?._tokenResponse?.error?.message;
+  const serverMessage = error?.customData?._serverResponse?.error?.message;
+  const message = tokenMessage || serverMessage || error?.message || "";
+  return message
+    .replace(/^Firebase:\s*/i, "")
+    .replace(/\s*\([^)]*\)\.?\s*$/g, "")
+    .trim();
 }
 
 async function loadFirebaseSdk() {
