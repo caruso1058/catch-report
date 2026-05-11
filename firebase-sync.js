@@ -14,7 +14,10 @@ if (!appApi) {
   throw new Error("Catch Report app API was not ready before Firebase sync loaded.");
 }
 
-if (!firebaseEnabled || !firebaseConfig.projectId) {
+if (window.location.protocol === "file:") {
+  appApi.setSyncStatus("Firebase sign-in cannot run from a local file. Open the GitHub Pages app to sync catches.");
+  appApi.setAuthControls({ configured: false, signedIn: false });
+} else if (!firebaseEnabled || !firebaseConfig.projectId) {
   appApi.setSyncStatus("Cloud sync is off until Firebase is configured.");
   appApi.setAuthControls({ configured: false, signedIn: false });
 } else {
