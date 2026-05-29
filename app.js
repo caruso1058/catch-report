@@ -167,6 +167,7 @@ const els = {
   privacyNote: document.querySelector("#privacy-note"),
   syncStatus: document.querySelector("#sync-status"),
   signInBtn: document.querySelector("#sign-in-btn"),
+  linkGoogleBtn: document.querySelector("#link-google-btn"),
   signOutBtn: document.querySelector("#sign-out-btn"),
   installHint: document.querySelector("#install-hint"),
 };
@@ -1014,10 +1015,12 @@ window.CatchReportApp = {
   setSyncStatus(message) {
     els.syncStatus.textContent = message;
   },
-  setAuthControls({ configured, signedIn, signIn, signOut }) {
+  setAuthControls({ configured, signedIn, canLinkGoogle = false, signIn, signOut, linkGoogle }) {
     els.signInBtn.hidden = !configured || signedIn;
+    els.linkGoogleBtn.hidden = !configured || !signedIn || !canLinkGoogle;
     els.signOutBtn.hidden = !configured || !signedIn;
     els.signInBtn.onclick = signIn;
+    els.linkGoogleBtn.onclick = linkGoogle;
     els.signOutBtn.onclick = signOut;
   },
 };

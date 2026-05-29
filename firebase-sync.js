@@ -38,6 +38,7 @@ async function bootFirebase() {
     configured: true,
     signedIn: false,
     signIn,
+    linkGoogle,
     signOut: () => firebase.signOut(auth),
   });
 
@@ -57,16 +58,19 @@ async function bootFirebase() {
         configured: true,
         signedIn: false,
         signIn,
+        linkGoogle,
         signOut: () => firebase.signOut(auth),
       });
       return;
     }
 
-    appApi.setSyncStatus(`Signed in as ${user.email || "you"}. Syncing catches...`);
+    appApi.setSyncStatus(`${authLabel(user)}. Syncing catches...`);
     appApi.setAuthControls({
       configured: true,
       signedIn: true,
+      canLinkGoogle: user.isAnonymous,
       signIn,
+      linkGoogle,
       signOut: () => firebase.signOut(auth),
     });
     subscribeToCatches(user.uid);
@@ -84,6 +88,35 @@ async function signIn() {
   }
 }
 
+async function linkGoogle() {
+  appApi.setSyncStatus("Opening Google to link this catch history...");
+
+  try {
+    const user = auth.currentUser || (await firebase.signInAnonymously(auth)).user;
+    const provider = googleProvider();
+    await firebase.linkWithPopup(user, provider);
+  } catch (error) {
+    console.error("Firebase Google link failed", error);
+
+    if (error?.code === "auth/credential-already-in-use" || error?.code === "auth/email-already-in-use") {
+      appApi.setSyncStatus("That Google account already exists. Signing into it and copying local catches...");
+      await firebase.signInWithPopup(auth, googleProvider());
+      scheduleSync(appApi.getCatches());
+      return;
+    }
+
+    appApi.setSyncStatus(authErrorMessage(error, "Google link failed"));
+  }
+}
+
+function googleProvider() {
+  const provider = new firebase.GoogleAuthProvider();
+  provider.addScope("email");
+  provider.addScope("profile");
+  provider.setCustomParameters({ prompt: "select_account" });
+  return provider;
+}
+
 function authErrorMessage(error, prefix = "Sign-in failed") {
   const code = error?.code || "";
   const detail = authErrorDetail(error);
@@ -94,7 +127,7 @@ function authErrorMessage(error, prefix = "Sign-in failed") {
   }
 
   if (code === "auth/operation-not-allowed") {
-    return `${prefix}: enable Anonymous in Firebase Authentication > Sign-in method${suffix}.`;
+    return `${prefix}: enable Anonymous and Google in Firebase Authentication > Sign-in method${suffix}.`;
   }
 
   if (code === "auth/popup-closed-by-user") {
@@ -118,6 +151,12 @@ function authErrorMessage(error, prefix = "Sign-in failed") {
   }
 
   return `${prefix}${suffix}. Check Firebase Auth setup.`;
+}
+
+function authLabel(user) {
+  if (user.email) return `Signed in as ${user.email}`;
+  if (user.isAnonymous) return "Signed in with a private Firebase session";
+  return "Signed in";
 }
 
 function authErrorDetail(error) {
