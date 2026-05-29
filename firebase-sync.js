@@ -4,7 +4,6 @@ const appApi = window.CatchReportApp;
 let auth = null;
 let db = null;
 let firebase = null;
-let provider = null;
 let currentUser = null;
 let unsubscribe = null;
 let cloudReady = false;
@@ -29,10 +28,6 @@ if (window.location.protocol === "file:") {
 
 async function bootFirebase() {
   firebase = await loadFirebaseSdk();
-  provider = new firebase.GoogleAuthProvider();
-  provider.addScope("email");
-  provider.addScope("profile");
-  provider.setCustomParameters({ prompt: "select_account" });
   const firebaseApp = firebase.initializeApp(firebaseConfig);
   auth = firebase.getAuth(firebaseApp);
   db = firebase.getFirestore(firebaseApp);
@@ -79,10 +74,10 @@ async function bootFirebase() {
 }
 
 async function signIn() {
-  appApi.setSyncStatus("Opening Google sign-in...");
+  appApi.setSyncStatus("Creating private cloud sync session...");
 
   try {
-    await firebase.signInWithPopup(auth, provider);
+    await firebase.signInAnonymously(auth);
   } catch (error) {
     console.error("Firebase sign-in failed", error);
     appApi.setSyncStatus(authErrorMessage(error, "Sign-in failed"));
@@ -99,7 +94,7 @@ function authErrorMessage(error, prefix = "Sign-in failed") {
   }
 
   if (code === "auth/operation-not-allowed") {
-    return `${prefix}: enable Google in Firebase Authentication > Sign-in method${suffix}.`;
+    return `${prefix}: enable Anonymous in Firebase Authentication > Sign-in method${suffix}.`;
   }
 
   if (code === "auth/popup-closed-by-user") {
