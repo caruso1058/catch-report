@@ -35,6 +35,16 @@ const pugetSoundFish = [
   "Other",
 ];
 
+const neahBayFish = [
+  "King",
+  "Coho",
+  "Rock Fish",
+  "Cabazon",
+  "Lingcod",
+  "Kelp Greenling",
+  "Other",
+];
+
 const freshwaterLures = [
   "Spinner",
   "Spoon",
@@ -84,6 +94,20 @@ const waterAreas = [
     lures: saltwaterLures,
   },
   {
+    id: "neah-bay",
+    name: "Neah Bay",
+    waterType: "Saltwater",
+    lat: 48.3681,
+    lng: -124.6174,
+    zoom: 11,
+    span: {
+      lat: 0.12,
+      lng: 0.18,
+    },
+    fish: neahBayFish,
+    lures: saltwaterLures,
+  },
+  {
     id: "other-lake",
     name: "Other lake",
     waterType: "Freshwater lake",
@@ -108,7 +132,7 @@ const waterAreas = [
       lat: 0.02,
       lng: 0.02,
     },
-    fish: [...freshwaterFish.slice(0, -1), ...pugetSoundFish.slice(0, -1), "Other"],
+    fish: [...freshwaterFish.slice(0, -1), ...pugetSoundFish.slice(0, -1), ...neahBayFish.slice(0, -1), "Other"],
     lures: [...freshwaterLures.slice(0, -1), ...saltwaterLures.slice(0, -1), "Other"],
   },
 ];

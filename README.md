@@ -15,7 +15,7 @@ Open `http://127.0.0.1:4173/index.html`.
 - Fast catch entry with fish and lure dropdowns.
 - `Other` write-ins for unusual species or lure choices.
 - Time defaults to the device's current local time.
-- Water presets for Lake Margaret, Puget Sound, other lakes, and custom water.
+- Water presets for Lake Margaret, Puget Sound, Neah Bay, other lakes, and custom water.
 - Fish and lure options adjust to the selected water type.
 - Location defaults to the selected water center and can be refined by GPS or map pin.
 - GPS fill-in when browser location permission is allowed.
@@ -31,6 +31,8 @@ Open `http://127.0.0.1:4173/index.html`.
 ## Puget Sound Expansion
 
 The Puget Sound preset starts with common recreational categories: Chinook, coho, pink, and chum salmon; sea-run cutthroat; lingcod; flounder/flatfish; kelp greenling; cabezon; and Pacific halibut.
+
+The Neah Bay preset starts with annual-trip species: King, coho, rock fish, cabazon, lingcod, and kelp greenling.
 
 This is for catch logging, not regulation guidance. Marine area openings, retention, depth, gear, and emergency rules change often, so check WDFW before fishing.
 
