@@ -68,7 +68,7 @@ async function bootFirebase() {
     appApi.setAuthControls({
       configured: true,
       signedIn: true,
-      canLinkGoogle: user.isAnonymous,
+      canLinkGoogle: false,
       signIn,
       linkGoogle,
       signOut: () => firebase.signOut(auth),
@@ -127,7 +127,7 @@ function authErrorMessage(error, prefix = "Sign-in failed") {
   }
 
   if (code === "auth/operation-not-allowed") {
-    return `${prefix}: enable Anonymous and Google in Firebase Authentication > Sign-in method${suffix}.`;
+    return `${prefix}: enable Anonymous in Firebase Authentication > Sign-in method${suffix}.`;
   }
 
   if (code === "auth/popup-closed-by-user") {
