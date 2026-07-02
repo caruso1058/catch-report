@@ -64,7 +64,7 @@ async function bootFirebase() {
       return;
     }
 
-    appApi.setSyncStatus(`${authLabel(user)}. Syncing catches...`);
+    appApi.setSyncStatus(`${authLabel(user)} (${shortUid(user.uid)}). Syncing catches...`);
     appApi.setAuthControls({
       configured: true,
       signedIn: true,
@@ -191,7 +191,7 @@ function subscribeToCatches(uid) {
       appApi.mergeCloudCatches(cloudCatches);
       cloudReady = true;
       scheduleSync(appApi.getCatches());
-      appApi.setSyncStatus(`Cloud sync on. ${appApi.getCatches().length} catches backed up.`);
+      appApi.setSyncStatus(`Cloud sync on (${shortUid(uid)}). ${appApi.getCatches().length} catches backed up.`);
     },
     () => {
       appApi.setSyncStatus("Cloud sync error. Check Firebase rules and setup.");
@@ -207,22 +207,19 @@ function scheduleSync(catches) {
 async function syncLocalToCloud(catches) {
   if (!currentUser) return;
 
-  const catchesRef = firebase.collection(db, "users", currentUser.uid, "catches");
-  const existing = await firebase.getDocs(catchesRef);
-  const localIds = new Set(catches.map((entry) => entry.id));
-
-  await Promise.all([
-    ...existing.docs
-      .filter((item) => !localIds.has(item.id))
-      .map((item) => firebase.deleteDoc(firebase.doc(db, "users", currentUser.uid, "catches", item.id))),
-    ...catches.map((entry) =>
+  await Promise.all(
+    catches.map((entry) =>
       firebase.setDoc(firebase.doc(db, "users", currentUser.uid, "catches", entry.id), toFirestore(entry, currentUser.uid), {
         merge: true,
       }),
     ),
-  ]);
+  );
 
-  appApi.setSyncStatus(`Cloud sync on. ${catches.length} catches backed up.`);
+  appApi.setSyncStatus(`Cloud sync on (${shortUid(currentUser.uid)}). ${catches.length} catches backed up.`);
+}
+
+function shortUid(uid) {
+  return `session ${String(uid).slice(-6)}`;
 }
 
 function toFirestore(entry, uid) {
