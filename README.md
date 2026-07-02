@@ -10,6 +10,14 @@ python3 -m http.server 4173
 
 Open `http://127.0.0.1:4173/index.html`.
 
+## Deploy
+
+The app is configured for Firebase Hosting on project `catch-report-80cc8`.
+
+```bash
+firebase deploy --only hosting
+```
+
 ## Current Features
 
 - Fast catch entry with fish and lure dropdowns.

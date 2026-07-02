@@ -1,0 +1,32 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      ".git/**",
+      ".github/**",
+      ".firebaserc",
+      ".gitignore",
+      "firebase.json",
+      "firestore.rules",
+      "README.md",
+      "SECURITY.md"
+    ],
+    "headers": [
+      {
+        "source": "**/*.@(html|js|css|json|webmanifest)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
